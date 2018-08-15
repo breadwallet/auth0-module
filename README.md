@@ -18,6 +18,8 @@ Use auth0 for login/auth in the simplest possible way.  Hooks and configuration 
 - Add `nuxt-module-auth0` dependency using yarn or npm to your project
 - Add `nuxt-module-auth0` to `modules` section of `nuxt.config.js`
 
+- Set AUTH0_DOMAIN, AUTH0_CLIENT_ID, and AUTH0_CLIENT_SECRET environment variables (or set these via config arguments).
+
 ```js
 {
   modules: [
@@ -139,6 +141,43 @@ cookie.  If you just want the highlights:
 
 Anything returned from the callback will be stored in the cookie, so
 feel free to customize.
+
+## RBAC
+
+I want roles!  How do I get roles to work in Auth0?  Here's an example
+rule you could add, which automatically provisions user accounts with
+a certain email domain administrative access:
+
+```
+function (user, context, callback) {
+  user.app_metadata = user.app_metadata || {};
+  // You can add a Role based on what you want
+  // In this case I check domain
+  var addRolesToUser = function(user, cb) {
+    if (user.email && user.email.indexOf('@example.com') > -1) {
+      cb(null, 'administrator');
+    } else {
+      cb(null, 'user');
+    }
+  };
+
+  addRolesToUser(user, function(err, role) {
+    if (err) {
+      callback(err);
+    } else {
+      user.app_metadata.role = role;
+      auth0.users.updateAppMetadata(user.user_id, user.app_metadata)
+        .then(function(){
+          context.idToken['https://example.com/role'] = user.app_metadata.role;
+          callback(null, user, context);
+        })
+        .catch(function(err){
+          callback(err);
+        });
+    }
+  });
+}
+```
 
 
 ## Development
