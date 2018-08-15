@@ -12,7 +12,7 @@
 
 ## Features
 
-The module features
+Use auth0 for login/auth in the simplest possible way.  Hooks and configuration for progressive increases in complexity.
 
 ## Setup
 - Add `nuxt-module-auth0` dependency using yarn or npm to your project
@@ -30,9 +30,116 @@ The module features
 }
 ```
 
+You will likely want to set a cookie secret - either by setting the
+COOKIE_SECRET environment variable, or passing it in as an option
+(`cookie.keys: [ 'active-secret','old-secret' ]`).  If you do neither,
+it makes up a random cookie signing thing, which means that every time
+the server restarts, all old sessions are invalidated.  Not a terrible
+security default, but will certainly annoy some people.
+
 ## Usage
 
-Module Description
+Once you have added this module (and restarted nuxt), you'll have two
+new URLs you can hit:
+
+- /auth0/login?then=<urlencoded-link>
+- /auth0/logout
+
+If you want a particular page/layout/etc to require authentication,
+simply add middleware to it:
+
+```
+export default {
+  middleware: ['admin-only'],
+}
+```
+
+and add the middleware itself:
+
+```
+export default async function(ctx) {
+  let user;
+  
+  if(process.server) {
+    var session = ctx.req.session
+    user = session && session.passport && session.passport.user
+    
+  } else {
+    user = ctx.store.state.user
+  }
+
+  if(!user || user['https://brd.com/role'] != 'administrator') {
+    ctx.redirect(`/please-login?as=administrator&then=${encodeURIComponent(ctx.route.path)}`);
+  }
+}
+
+```
+
+This particular example stores user data in the store, like so (this would be store/index.js):
+
+```
+export const state = () => ({
+  user: null,
+})
+
+export const mutations = {
+  user(state,val) {
+    state.user = val;
+  }
+}
+
+export const actions = {
+  nuxtServerInit ({ commit }, { req }) {
+    console.log("SESSION: ",req.session);
+    if (req.session.passport && req.session.passport.user) {
+      commit('user', req.session.passport.user)
+    }
+  }
+}
+```
+
+It also depends on a `/pages/please-login.vue` file to handle redirected "not-authorized" users:
+
+```
+<template>
+  <div>
+    <p>
+      Please log in!  You need the role of {{ $route.query.as }}.
+    </p>
+    <p>
+      <a :href="`/auth0/login?then=${encodeURIComponent($route.query.then)}`">Log In</a>
+    </p>
+  </div>  
+</template>
+<script>
+
+export default {
+
+}
+  
+</script>
+```
+
+The idea here is to minimize integration pain, and make it really easy
+to keep track of how things are integrating.  We could in principle
+add these files to the module itself, but they're basically guaranteed
+to need changing, and often they'll have app-specific logic around them.
+
+If you want to customize how the module adds cookie data, you can add
+a callback.  By default, it stores everything from the JWT in the
+cookie.  If you just want the highlights:
+
+```
+  modules: [
+    ['nuxt-module-auth0',{
+      callback: (accessToken,refreshToken,params,profile) => profile._json
+    }],
+  ],
+```
+
+Anything returned from the callback will be stored in the cookie, so
+feel free to customize.
+
 
 ## Development
 
